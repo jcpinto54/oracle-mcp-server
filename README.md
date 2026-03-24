@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-Protocol-orange.svg)](https://modelcontextprotocol.io/)
 
-A Model Context Protocol (MCP) server that provides direct SQL query execution capabilities for Oracle databases. This server enables AI assistants and MCP clients to interact with Oracle databases through a standardized interface, allowing for database exploration, query execution, and performance analysis.
+A Model Context Protocol (MCP) server that provides direct SQL query execution capabilities for Oracle databases. This server enables AI assistants and MCP clients to interact with Oracle databases through a standardized interface. Schema exploration, execution plans, and metadata queries are done by running the appropriate SQL via `execute_sql` (for example against `USER_*` / `ALL_*` views).
 
 ## 🚀 Core Features
 
@@ -16,16 +16,9 @@ A Model Context Protocol (MCP) server that provides direct SQL query execution c
 - Automatic result formatting with configurable row limits
 - Transaction handling with automatic commit for DML operations
 
-### Database Schema Exploration
-- **Table Discovery**: List all tables in the database or specific schemas
-- **Table Structure**: Get detailed column information including data types, constraints, and defaults
-- **Foreign Key Relationships**: Discover table relationships and dependencies
-- **Query Performance Analysis**: Generate and analyze execution plans for query optimization
-
 ### MCP Protocol Integration
 - Full Model Context Protocol (MCP) compliance
-- Tool-based interface for database operations
-- Resource-based schema information access
+- Single tool (`execute_sql`) for all database operations
 - Async/await support for concurrent operations
 - Comprehensive error handling and logging
 
@@ -144,9 +137,10 @@ The server uses `config.json` for configuration. Copy `config.example.json` to `
 
 ## 🛠️ Available Tools
 
-The MCP server provides the following tools:
+The MCP server exposes one tool:
 
-#### 1. execute_sql
+### execute_sql
+
 Execute SQL queries against the Oracle database.
 
 **Parameters:**
@@ -161,50 +155,11 @@ JOIN customer_node c ON a.customer_node_id = c.customer_node_id
 WHERE account_balance > 1000
 ```
 
-#### 2. describe_table
-Get detailed table structure and column information.
+**Metadata examples** (run as `query` via `execute_sql`):
 
-**Parameters:**
-- `table_name` (required): Name of the table to describe
-- `schema` (optional): Schema name
-
-**Example:**
-```
-Table: ACCOUNT
-
-Column Name | Data Type | Length | Precision | Scale | Nullable | Default
-ACCOUNT_ID | NUMBER | | 10 | 0 | N | 
-CUSTOMER_NODE_ID | NUMBER | | 10 | 0 | Y | 
-ACCOUNT_TYPE_ID | NUMBER | | 10 | 0 | Y | 
-ACCOUNT_BALANCE | NUMBER | | 15 | 2 | Y | 0
-```
-
-#### 3. list_tables
-List all tables in the database or specific schema.
-
-**Parameters:**
-- `schema` (optional): Schema name to filter tables
-- `pattern` (optional): Pattern to match table names
-
-#### 4. get_table_relationships
-Get foreign key relationships for a table.
-
-**Parameters:**
-- `table_name` (required): Name of the table
-- `schema` (optional): Schema name
-
-#### 5. analyze_query_plan
-Get execution plan for SQL query performance analysis.
-
-**Parameters:**
-- `query` (required): SQL query to analyze
-
-### Resources
-
-The server also provides these resources:
-
-- `oracle://database/schema`: Complete database schema information (JSON)
-- `oracle://database/tables`: List of all database tables with metadata (JSON)
+- List tables (current user): `SELECT table_name FROM user_tables ORDER BY table_name`
+- Column list: query `user_tab_columns` or `all_tab_columns` as appropriate
+- Execution plan: `EXPLAIN PLAN FOR ...` then select from `plan_table` (requires `PLAN_TABLE` and suitable privileges)
 
 ## 🔗 MCP Client Configuration
 
@@ -234,7 +189,6 @@ To use this server with an MCP client, add the following to your MCP client conf
 
 - Configurable result set limits (default: 1000 rows)
 - Query timeout protection (default: 30 seconds)
-- Execution plan analysis for query optimization
 - Efficient connection management
 - Async operation support
 
@@ -312,7 +266,7 @@ ORDER BY ah.transaction_date DESC
 1. **Use Indexes**: Ensure proper indexes exist for your queries
 2. **Limit Results**: Use the `max_results` configuration to prevent memory issues
 3. **Parameterized Queries**: Use parameters to prevent SQL injection and improve performance
-4. **Query Analysis**: Use the `analyze_query_plan` tool to optimize slow queries
+4. **Query analysis**: Use `EXPLAIN PLAN` and `plan_table` (or `DBMS_XPLAN`) via `execute_sql` when you need execution plans
 5. **Connection Pooling**: Consider implementing connection pooling for high-load scenarios
 
 ## 🤝 Contributing
