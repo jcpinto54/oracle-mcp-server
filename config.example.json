@@ -14,7 +14,8 @@
             "username": "other-schema-user",
             "password": "your-password",
             "service_name": null,
-            "sid": "YOUR_SID"
+            "sid": "YOUR_SID",
+            "sql_max_tier": "write"
         }
     },
     "mcp": {

@@ -6,19 +6,20 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-Protocol-orange.svg)](https://modelcontextprotocol.io/)
 
-A Model Context Protocol (MCP) server that provides direct SQL query execution capabilities for Oracle databases. This server enables AI assistants and MCP clients to interact with Oracle databases through a standardized interface. Schema exploration, execution plans, and metadata queries are done by running the appropriate SQL via `execute_sql` (for example against `USER_*` / `ALL_*` views).
+A Model Context Protocol (MCP) server that provides tiered SQL execution for Oracle databases. Four cumulative tools (`sql_read`, `sql_write`, `sql_ddl`, `sql_full`) enforce statement categories before execution; optional per-tenant `sql_max_tier` caps risk even when clients call `sql_full`. **SQL injection remains a critical threat** whenever the model builds `query` from chat, user paste, or documents: malicious fragments can change what the database executes (exfiltration, destructive DML/DDL, privilege abuse). **Binds (`:1`, `:2`, … + `params`) are mandatory for variable data**; tier limits limit *what kind* of statement can run, not *logic* inside a single statement. Schema exploration and metadata use `sql_read` (for example against `USER_*` / `ALL_*` views); `EXPLAIN PLAN` uses `sql_write` because it writes to `PLAN_TABLE`.
 
 ## 🚀 Core Features
 
 ### SQL Query Execution
-- Execute any SQL query (SELECT, INSERT, UPDATE, DELETE) against Oracle databases
-- Support for parameterized queries to prevent SQL injection
+- Tiered tools: `sql_read` (read-shaped SQL), `sql_write` ( + DML and `EXPLAIN PLAN`), `sql_ddl` (+ DDL), `sql_full` (break-glass, no classification)
+- Single-statement enforcement for the three classified tools (best-effort `;` splitting outside string literals)
+- **Bind parameters (`params`)** for any data that is not a fixed literal you fully control—treating this as optional is how SQL injection happens in LLM workflows
 - Automatic result formatting with configurable row limits
-- Transaction handling with automatic commit for DML operations
+- Classified tools auto-commit after successful execution; `sql_full` does not auto-commit (use `COMMIT` / `ROLLBACK` in SQL as needed)
 
 ### MCP Protocol Integration
 - Full Model Context Protocol (MCP) compliance
-- Tools: `list_tenants` (discovery) and `execute_sql` (per-tenant queries)
+- Tools: `list_tenants` (discovery) and `sql_read` / `sql_write` / `sql_ddl` / `sql_full`
 - Async/await support for concurrent operations
 - Comprehensive error handling and logging
 
@@ -91,7 +92,7 @@ SQLHelp/
 
 ## ⚙️ Configuration
 
-The server uses `config.json` for configuration. Copy `config.example.json` to `config.json` and define **one entry per Oracle user/schema** under `tenants`. Each key is the `tenant_id` clients pass to `execute_sql`.
+The server uses `config.json` for configuration. Copy `config.example.json` to `config.json` and define **one entry per Oracle user/schema** under `tenants`. Each key is the `tenant_id` clients pass to the `sql_*` tools.
 
 **Migration from older configs:** if you previously used a single top-level `database` object, move those fields under `tenants` using a stable id (for example `"prod"`).
 
@@ -112,7 +113,8 @@ The server uses `config.json` for configuration. Copy `config.example.json` to `
             "username": "uat-schema-user",
             "password": "your-password",
             "service_name": null,
-            "sid": "YOUR_SID"
+            "sid": "YOUR_SID",
+            "sql_max_tier": "ddl"
         }
     },
     "mcp": {
@@ -131,12 +133,13 @@ The server uses `config.json` for configuration. Copy `config.example.json` to `
 
 ### Configuration Options
 
-- **tenants**: Map of tenant id (string) to Oracle connection details. The id is what you pass as `tenant_id` to `execute_sql`.
+- **tenants**: Map of tenant id (string) to Oracle connection details. The id is what you pass as `tenant_id` to any `sql_*` tool.
   - `host`: Database server hostname/IP
   - `port`: Database port (usually 1521)
   - `username`: Database username (Oracle schema user for that tenant)
   - `password`: Database password
   - **Exactly one** of `service_name` or `sid` must be set to a non-empty string (the other should be `null`). Do not set both.
+  - `sql_max_tier` (optional): Cap statements for this tenant: `read`, `write`, `ddl`, or `full` (default `full`). The server rejects work above the cap even if the client calls `sql_full`.
 
 - **mcp**: MCP server settings
   - `max_results`: Maximum number of rows to return (default: 1000)
@@ -148,24 +151,49 @@ The server uses `config.json` for configuration. Copy `config.example.json` to `
 
 ## 🛠️ Available Tools
 
-The MCP server exposes two tools: `list_tenants` and `execute_sql`.
+The MCP server exposes `list_tenants` plus four cumulative SQL tools. Tool descriptions sent to the LLM explain privileges; **least-privilege choice is enforced mainly by the MCP client** (prompts and which tools are registered). The server enforces tier- and cap-based **correctness**.
 
 ### list_tenants
 
-Returns JSON listing configured tenants: `tenant_id`, `host`, `port`, and either `service_name` or `sid`. Passwords are never returned. Call this first so the client can choose a valid `tenant_id`.
+Returns JSON listing configured tenants: `tenant_id`, `host`, `port`, `sql_max_tier`, and either `service_name` or `sid`. Passwords are never returned. Call this first so the client can choose a valid `tenant_id`.
 
 **Parameters:** none.
 
-### execute_sql
+### sql_read
 
-Execute SQL queries against the Oracle database for a **specific** tenant.
+Single SQL statement: read-oriented only (`SELECT`, read-safe `WITH … ) SELECT …`). No DML, DDL, `EXPLAIN PLAN`, PL/SQL, transaction control, or multi-statement scripts. Auto-commits after success.
 
-**Parameters:**
+### sql_write
+
+Everything `sql_read` allows, plus DML (`INSERT`, `UPDATE`, `DELETE`, `MERGE`), `EXPLAIN PLAN` (writes to `PLAN_TABLE`), `SELECT … FOR UPDATE`, `LOCK TABLE`. One statement; auto-commit after success. Not for DDL, `GRANT`/`REVOKE`, PL/SQL, or `COMMIT`/`ROLLBACK` — use `sql_ddl` or `sql_full` as appropriate.
+
+### sql_ddl
+
+Everything `sql_write` allows, plus DDL-style statements (`CREATE`, `ALTER` except `ALTER SESSION` / `ALTER SYSTEM`, `DROP`, `TRUNCATE`, `RENAME`, `COMMENT ON …`). One statement; auto-commit after success. For session/server changes, grants, PL/SQL, scripts, or transaction commands, use `sql_full`.
+
+### sql_full
+
+Break-glass: **no** keyword classification. Allows multi-statement scripts, PL/SQL, `COMMIT` / `ROLLBACK`, `GRANT`, etc. Server **does not** auto-commit after execution. Still limited by per-tenant `sql_max_tier`.
+
+**Shared parameters** (all `sql_*` tools):
+
 - `tenant_id` (required): Tenant key from `list_tenants` / `config.json`
-- `query` (required): SQL query to execute
-- `params` (optional): Array of parameters for parameterized queries
+- `query` (required): SQL string (for classified tools, exactly one statement; see tier rules above)
+- `params` (optional): Bind values for **parameterized SQL** — see below
 
-**Example query** (conceptual; pass `tenant_id` with the tool invocation):
+**Parameterized queries (bind variables) — SQL injection defense**  
+
+If you concatenate or f-string **any** external, user, or chat-derived text into `query`, an attacker (or a poisoned document the model reads) can inject SQL. Consequences include **unauthorized reads**, **mass updates/deletes**, **schema destruction**, and **privilege abuse**—even inside a single “allowed” tier. **Defense:** keep the SQL *shape* fixed in `query` and move *values* into **`params`**.
+
+1. Put **positional** placeholders in `query`: Oracle style **` :1 `**, **` :2 `**, … for the first, second, … bind value.
+2. Pass **`params`** as a JSON array of **strings**, in order: first element binds `:1`, second binds `:2`, etc.
+3. If there are no placeholders, omit `params` or use `[]`.
+4. Oracle will coerce string binds to numbers or dates where the column/type allows.
+5. **Identifiers** (table/column names from user input) cannot be safely bound in plain SQL; avoid dynamic object names or enforce strict allowlists outside the LLM.
+
+**Example** (`sql_read`): safer pattern — `query` = `SELECT customer_name FROM customer WHERE customer_id = :1 AND status = :2` with `params` = `["12345", "ACTIVE"]`. **Unsafe pattern:** ``WHERE customer_id = '{user_id}'`` built from chat text.
+
+**Example** (`sql_read`; pass `tenant_id` with the tool invocation):
 
 ```sql
 SELECT customer_name, account_balance 
@@ -174,11 +202,22 @@ JOIN customer_node c ON a.customer_node_id = c.customer_node_id
 WHERE account_balance > 1000
 ```
 
-**Metadata examples** (run as `query` via `execute_sql` with the appropriate `tenant_id`):
+**Metadata examples** (`sql_read`): list tables — `SELECT table_name FROM user_tables ORDER BY table_name`; columns — `user_tab_columns` / `all_tab_columns`. **Execution plan:** use `sql_write` with `EXPLAIN PLAN FOR ...` (and query `plan_table` / `DBMS_XPLAN` as needed).
 
-- List tables (current user): `SELECT table_name FROM user_tables ORDER BY table_name`
-- Column list: query `user_tab_columns` or `all_tab_columns` as appropriate
-- Execution plan: `EXPLAIN PLAN FOR ...` then select from `plan_table` (requires `PLAN_TABLE` and suitable privileges)
+### Migration from `execute_sql`
+
+Replace the single tool with:
+
+| Before (`execute_sql`) | Replacement |
+| --- | --- |
+| `SELECT`, read-safe metadata | `sql_read` |
+| DML, `EXPLAIN PLAN`, `SELECT FOR UPDATE` | `sql_write` |
+| DDL (`CREATE`, `ALTER TABLE`, …) | `sql_ddl` |
+| Scripts, PL/SQL, `COMMIT`, `GRANT`, … | `sql_full` |
+
+### Classification limits
+
+Statement classification uses **heuristics** (leading keywords, `WITH` and `FOR UPDATE` patterns, top-level `;` outside quotes). It is **not** a full SQL parser; rare edge cases may mis-classify — use `sql_full` when necessary. Using a **higher** tool with a **lower-tier** statement is always allowed (cumulative tiers).
 
 ## 🔗 MCP Client Configuration
 
@@ -198,11 +237,20 @@ To use this server with an MCP client, add the following to your MCP client conf
 
 ## 🔒 Security Features
 
+### SQL injection (highest priority for AI integrations)
+
+- **Threat:** The model or client sends a `query` string. Embedding untrusted text (user questions, pasted logs, web/tool content) via string concatenation lets attackers **change query meaning**: broad `SELECT`s, `UNION`-based exfiltration, destructive `UPDATE`/`DELETE`, `DROP`, or sequences that defeat your intent.
+- **Mitigation:** Use **binds** (`:1`, `:2`, … + `params`) for every value that is not a constant you authored. See **Parameterized queries** above. Educate prompts: “never put variable input in the query text.”
+- **Limits of tiering:** `sql_read` / `sql_write` / `sql_ddl` / `sql_full` and `sql_max_tier` restrict **statement classes**, not **arbitrary SQL inside one statement**. Injection inside a `SELECT` can still leak the whole dataset readable by the schema user.
+- **Identifiers:** Dynamic table/column names from users are not safely fixable with value binds alone; use fixed SQL or server-side allowlists.
+
+### Other controls
+
+- Tiered tools plus optional per-tenant `sql_max_tier` cap
 - Secure credential management via configuration files
-- Parameterized query support to prevent SQL injection
 - Configurable result limits to prevent memory issues
 - Comprehensive logging for audit trails
-- Connection timeout and error handling
+- Connection error handling; rollback on failed classified executions
 
 ## 📊 Performance Features
 
@@ -284,8 +332,8 @@ ORDER BY ah.transaction_date DESC
 
 1. **Use Indexes**: Ensure proper indexes exist for your queries
 2. **Limit Results**: Use the `max_results` configuration to prevent memory issues
-3. **Parameterized Queries**: Use parameters to prevent SQL injection and improve performance
-4. **Query analysis**: Use `EXPLAIN PLAN` and `plan_table` (or `DBMS_XPLAN`) via `execute_sql` when you need execution plans
+3. **Parameterized queries**: Always bind variable **values** (`params`); never inline untrusted text into `query`. Improves plan reuse and avoids injection.
+4. **Query analysis**: Use `sql_write` with `EXPLAIN PLAN` and `plan_table` (or `DBMS_XPLAN`) when you need execution plans
 5. **Connection Pooling**: Consider implementing connection pooling for high-load scenarios
 
 ## 🤝 Contributing
