@@ -1,11 +1,21 @@
 {
-    "database": {
-        "host": "your-oracle-host",
-        "port": 1521,
-        "username": "your-username",
-        "password": "your-password",
-        "sid": "your-sid",
-        "service_name": null
+    "tenants": {
+        "example_service_tenant": {
+            "host": "your-oracle-host",
+            "port": 1521,
+            "username": "your-username",
+            "password": "your-password",
+            "service_name": "YOUR_SERVICE_NAME",
+            "sid": null
+        },
+        "example_sid_tenant": {
+            "host": "your-other-host",
+            "port": 1521,
+            "username": "other-schema-user",
+            "password": "your-password",
+            "service_name": null,
+            "sid": "YOUR_SID"
+        }
     },
     "mcp": {
         "server_name": "oracle-sql-helper",
@@ -18,4 +28,4 @@
         "level": "INFO",
         "file": "mcp_server.log"
     }
-} 
+}

@@ -18,7 +18,7 @@ A Model Context Protocol (MCP) server that provides direct SQL query execution c
 
 ### MCP Protocol Integration
 - Full Model Context Protocol (MCP) compliance
-- Single tool (`execute_sql`) for all database operations
+- Tools: `list_tenants` (discovery) and `execute_sql` (per-tenant queries)
 - Async/await support for concurrent operations
 - Comprehensive error handling and logging
 
@@ -60,9 +60,9 @@ A Model Context Protocol (MCP) server that provides direct SQL query execution c
    pip install oracledb[thick]
    ```
 
-4. **Configure database connection**:
+4. **Configure database connections**:
    ```bash
-   # Edit config.json with your database details
+   # Edit config.json: add one entry per Oracle user/schema under "tenants"
    # Use your preferred editor to modify config.json
    ```
 
@@ -91,17 +91,29 @@ SQLHelp/
 
 ## ⚙️ Configuration
 
-The server uses `config.json` for configuration. Copy `config.example.json` to `config.json` and update with your Oracle database details:
+The server uses `config.json` for configuration. Copy `config.example.json` to `config.json` and define **one entry per Oracle user/schema** under `tenants`. Each key is the `tenant_id` clients pass to `execute_sql`.
+
+**Migration from older configs:** if you previously used a single top-level `database` object, move those fields under `tenants` using a stable id (for example `"prod"`).
 
 ```json
 {
-    "database": {
-        "host": "your-oracle-host",
-        "port": 1521,
-        "username": "your-username",
-        "password": "your-password",
-        "sid": "your-sid",
-        "service_name": null
+    "tenants": {
+        "prod": {
+            "host": "your-oracle-host",
+            "port": 1521,
+            "username": "prod-schema-user",
+            "password": "your-password",
+            "service_name": "YOUR_SERVICE",
+            "sid": null
+        },
+        "uat": {
+            "host": "uat-oracle-host",
+            "port": 1521,
+            "username": "uat-schema-user",
+            "password": "your-password",
+            "service_name": null,
+            "sid": "YOUR_SID"
+        }
     },
     "mcp": {
         "server_name": "oracle-sql-helper",
@@ -119,13 +131,12 @@ The server uses `config.json` for configuration. Copy `config.example.json` to `
 
 ### Configuration Options
 
-- **database**: Oracle database connection details
+- **tenants**: Map of tenant id (string) to Oracle connection details. The id is what you pass as `tenant_id` to `execute_sql`.
   - `host`: Database server hostname/IP
   - `port`: Database port (usually 1521)
-  - `username`: Database username
+  - `username`: Database username (Oracle schema user for that tenant)
   - `password`: Database password
-  - `sid`: Database SID (Service Identifier)
-  - `service_name`: Alternative to SID (use one or the other)
+  - **Exactly one** of `service_name` or `sid` must be set to a non-empty string (the other should be `null`). Do not set both.
 
 - **mcp**: MCP server settings
   - `max_results`: Maximum number of rows to return (default: 1000)
@@ -137,17 +148,25 @@ The server uses `config.json` for configuration. Copy `config.example.json` to `
 
 ## 🛠️ Available Tools
 
-The MCP server exposes one tool:
+The MCP server exposes two tools: `list_tenants` and `execute_sql`.
+
+### list_tenants
+
+Returns JSON listing configured tenants: `tenant_id`, `host`, `port`, and either `service_name` or `sid`. Passwords are never returned. Call this first so the client can choose a valid `tenant_id`.
+
+**Parameters:** none.
 
 ### execute_sql
 
-Execute SQL queries against the Oracle database.
+Execute SQL queries against the Oracle database for a **specific** tenant.
 
 **Parameters:**
+- `tenant_id` (required): Tenant key from `list_tenants` / `config.json`
 - `query` (required): SQL query to execute
 - `params` (optional): Array of parameters for parameterized queries
 
-**Example:**
+**Example query** (conceptual; pass `tenant_id` with the tool invocation):
+
 ```sql
 SELECT customer_name, account_balance 
 FROM account a 
@@ -155,7 +174,7 @@ JOIN customer_node c ON a.customer_node_id = c.customer_node_id
 WHERE account_balance > 1000
 ```
 
-**Metadata examples** (run as `query` via `execute_sql`):
+**Metadata examples** (run as `query` via `execute_sql` with the appropriate `tenant_id`):
 
 - List tables (current user): `SELECT table_name FROM user_tables ORDER BY table_name`
 - Column list: query `user_tab_columns` or `all_tab_columns` as appropriate
@@ -189,7 +208,7 @@ To use this server with an MCP client, add the following to your MCP client conf
 
 - Configurable result set limits (default: 1000 rows)
 - Query timeout protection (default: 30 seconds)
-- Efficient connection management
+- One lazy Oracle connection per tenant (reused for that tenant after first use)
 - Async operation support
 
 ## 🐛 Troubleshooting
