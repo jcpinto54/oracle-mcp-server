@@ -8,6 +8,11 @@
 
 A Model Context Protocol (MCP) server that provides tiered SQL execution for Oracle databases. Four cumulative tools (`sql_read`, `sql_write`, `sql_ddl`, `sql_full`) enforce statement categories before execution; optional per-tenant `sql_max_tier` caps risk even when clients call `sql_full`. **SQL injection remains a critical threat** whenever the model builds `query` from chat, user paste, or documents: malicious fragments can change what the database executes (exfiltration, destructive DML/DDL, privilege abuse). **Binds (`:1`, `:2`, … + `params`) are mandatory for variable data**; tier limits limit *what kind* of statement can run, not *logic* inside a single statement. Schema exploration and metadata use `sql_read` (for example against `USER_*` / `ALL_*` views); `EXPLAIN PLAN` uses `sql_write` because it writes to `PLAN_TABLE`.
 
+## Maintainer
+
+Maintainer: João Castro Pinto  
+Forked from: Siddharth Arvind Singh
+
 ## 🚀 Core Features
 
 ### SQL Query Execution
