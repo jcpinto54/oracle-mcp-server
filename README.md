@@ -31,8 +31,8 @@ Forked from: Siddharth Arvind Singh
 ## 📋 Requirements
 
 - Python 3.8+
-- Oracle Database (11g, 12c, 18c, 19c, 21c)
-- Oracle Client Libraries (Instant Client or full client)
+- Oracle Database reachable from the machine running this server (see [python-oracledb installation](https://python-oracledb.readthedocs.io/en/latest/user_guide/installation.html) for supported environments)
+- [`python-oracledb`](https://pypi.org/project/oracledb/) (`oracledb` on PyPI), installed via `requirements.txt` or your environment
 - MCP-compatible client (Cursor, Claude Desktop, etc.)
 
 ## 🛠️ Quick Start
@@ -53,27 +53,15 @@ Forked from: Siddharth Arvind Singh
    - Install required dependencies (`requirements.txt`)
    - Install the package in editable mode (`pip install -e .`) so `python -m oracle_mcp_server` works
    - Create `config.json` in the repository root from `config/config.example.json`
-   - Verify Oracle client availability
+   - Verify that the `oracledb` Python package can be imported
 
-3. **Install Oracle Client Libraries** (if not already installed):
-   
-   **Option A: Oracle Instant Client (Recommended)**
-   - Download Oracle Instant Client from Oracle website
-   - Extract to a directory (e.g., `C:\oracle\instantclient_21_3`)
-   - Add the directory to your PATH environment variable
-   
-   **Option B: Using thick mode with oracledb**
-   ```bash
-   pip install oracledb[thick]
-   ```
-
-4. **Configure database connections**:
+3. **Configure database connections**:
    ```bash
    # Edit config.json: add one entry per Oracle user/schema under "tenants"
    # Use your preferred editor to modify config.json
    ```
 
-5. **Run the server** (from the repository root, after bootstrap):
+4. **Run the server** (from the repository root, after bootstrap):
    ```bash
    python -m oracle_mcp_server
    ```
@@ -98,10 +86,11 @@ oracle-mcp-server/
 │   └── config.example.json    # Example configuration (copy to root `config.json`)
 ├── scripts/
 │   └── bootstrap.py           # Dependency + editable install + config copy
-├── tests/                     # Placeholder for automated tests
+├── tests/                     # pytest suite (unit + mocked server tests)
 ├── pyproject.toml             # Package metadata + src layout (use with `pip install -e .`)
 ├── config.json                # Local server configuration (created by bootstrap; not in git)
 ├── requirements.txt           # Python dependencies
+├── THIRD_PARTY_NOTICES.md     # Third-party and dependency license summary
 ├── README.md
 └── LICENSE
 ```
@@ -284,9 +273,9 @@ If your MCP host does not support `cwd`, pass an absolute path to `config.json` 
 
 ### Common Issues
 
-1. **Oracle client not found**:
-   - Ensure Oracle Instant Client is installed and in PATH
-   - Try installing `oracledb[thick]` package
+1. **`oracledb` import or driver errors**:
+   - Ensure dependencies are installed: `pip install -r requirements.txt` (or re-run `python scripts/bootstrap.py`)
+   - Check Python version and `cryptography` (a dependency of `python-oracledb`)
 
 2. **Connection timeout**:
    - Verify database host and port are correct
@@ -357,23 +346,51 @@ ORDER BY ah.transaction_date DESC
 4. **Query analysis**: Use `sql_write` with `EXPLAIN PLAN` and `plan_table` (or `DBMS_XPLAN`) when you need execution plans
 5. **Connection Pooling**: Consider implementing connection pooling for high-load scenarios
 
+## Tests
+
+Automated tests cover SQL tier heuristics, tenant configuration validation, and MCP server guardrails using mocks (no live Oracle required for the default run).
+
+1. Install the package in editable mode with test dependencies:
+   ```bash
+   pip install -e ".[test]"
+   ```
+2. From the repository root, run:
+   ```bash
+   pytest
+   ```
+
+**Layout**
+
+- `tests/unit/` — `sql_tier_policy` and `tenant_config` behavior
+- `tests/server/` — tier enforcement, `call_tool` dispatch, and `_run_sql_sync` (fake connections/cursors)
+
+**Extending**
+
+- Prefer table-driven cases in unit tests for new classification or config rules.
+- For execution paths, add fakes under `tests/server/` and avoid real `oracledb` connections unless you introduce optional integration tests.
+
+Configuration for `pytest` (paths, `pythonpath`, asyncio mode) lives in [`pyproject.toml`](pyproject.toml) under `[tool.pytest.ini_options]`.
+
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Run tests: `pip install -e ".[test]"` then `pytest`
+4. Commit your changes (`git commit -m 'Add some amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+Per [LICENSE](LICENSE), this project’s source is released under the **MIT License**. It **depends on** third-party packages (for example `mcp`, `rich`, `python-oracledb`) that remain under their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). **Oracle Client / Instant Client binaries are not distributed with this repository.** If you install or redistribute them separately, Oracle’s license terms apply. This paragraph is for transparency only and is not legal advice.
 
 ## 🆘 Support
 
 For issues and questions:
 1. Check the troubleshooting section
 2. Review the log files
-3. Verify Oracle client installation
+3. Verify `python-oracledb` is installed and that the host can reach Oracle over the network
 4. Test database connectivity outside of MCP
 5. Open an issue on GitHub

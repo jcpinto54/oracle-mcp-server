@@ -78,15 +78,14 @@ def create_config(repository_root: Path):
 
 
 def check_oracle_client():
-    """Check if Oracle client is available"""
-    print("🔍 Checking Oracle client availability...")
+    """Check if the oracledb package is importable"""
+    print("🔍 Checking python-oracledb availability...")
     try:
         import oracledb  # noqa: F401
         print("✅ Oracle Python driver (oracledb) is available")
     except ImportError:
         print("❌ Oracle Python driver not found")
-        print("💡 Install with: pip install oracledb[thick]")
-        print("💡 Or install Oracle Instant Client and add to PATH")
+        print("💡 Install with: pip install oracledb")
 
 
 def main():
@@ -106,9 +105,8 @@ def main():
     print("✅ Setup completed!")
     print("📝 Next steps:")
     print("   1. Edit config.json with your database credentials")
-    print("   2. Install Oracle Client Libraries if not already installed")
-    print("   3. Run: python -m oracle_mcp_server")
-    print("   4. Configure your MCP client to use this server")
+    print("   2. Run: python -m oracle_mcp_server")
+    print("   3. Configure your MCP client to use this server")
 
 
 if __name__ == "__main__":
