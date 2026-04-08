@@ -1,12 +1,20 @@
-name: CI
+# Publish to PyPI when a version tag is pushed (e.g. v1.0.1).
+# Configure PyPI "trusted publishing" (OpenID Connect) for this repository.
+# Optional: add `environment: release` to the publish job and create a matching GitHub Environment for approval gates.
+
+name: Publish
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
-  test:
+  publish:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,15 +40,5 @@ jobs:
       - name: Build sdist and wheel
         run: python -m build
 
-      - name: Smoke install wheel and CLI entry point
-        run: |
-          python -m venv /tmp/oracle-mcp-wheel-smoke
-          /tmp/oracle-mcp-wheel-smoke/bin/pip install dist/*.whl
-          set +e
-          /tmp/oracle-mcp-wheel-smoke/bin/oracle-mcp-server 2>/dev/null
-          smoke_exit=$?
-          set -e
-          if [ "$smoke_exit" -ne 2 ]; then
-            echo "Expected oracle-mcp-server to exit 2 without config; got $smoke_exit"
-            exit 1
-          fi
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

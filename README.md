@@ -32,14 +32,14 @@ Forked from: Siddharth Arvind Singh
 
 - Python 3.8+
 - Oracle Database reachable from the machine running this server (see [python-oracledb installation](https://python-oracledb.readthedocs.io/en/latest/user_guide/installation.html) for supported environments)
-- [`python-oracledb`](https://pypi.org/project/oracledb/) (`oracledb` on PyPI), installed via `requirements.txt` or your environment
+- [`python-oracledb`](https://pypi.org/project/oracledb/) (`oracledb` on PyPI), installed automatically with the package via `pyproject.toml` (or legacy `requirements.txt` if you still use that file)
 - MCP-compatible client (Cursor, Claude Desktop, etc.)
 
 ## 🛠️ Quick Start
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/oracle-mcp-server.git
+   git clone https://github.com/jcpinto54/oracle-mcp-server.git
    cd oracle-mcp-server
    ```
 
@@ -50,8 +50,7 @@ Forked from: Siddharth Arvind Singh
    
    This will:
    - Check Python version compatibility
-   - Install required dependencies (`requirements.txt`)
-   - Install the package in editable mode (`pip install -e .`) so `python -m oracle_mcp_server` works
+   - Install the package in editable mode with test extras (`pip install -e ".[test]"`), pulling runtime dependencies from `pyproject.toml`
    - Create `config.json` in the repository root from `config/config.example.json`
    - Verify that the `oracledb` Python package can be imported
 
@@ -61,15 +60,31 @@ Forked from: Siddharth Arvind Singh
    # Use your preferred editor to modify config.json
    ```
 
-4. **Run the server** (from the repository root, after bootstrap):
+4. **Run the server** (pass the path to `config.json`; repo root after bootstrap is fine):
    ```bash
-   python -m oracle_mcp_server
+   oracle-mcp-server config.json
    ```
    
-   Optional: pass an explicit config path as the first argument:
+   Equivalent module form:
    ```bash
-   python -m oracle_mcp_server /path/to/config.json
+   python -m oracle_mcp_server config.json
    ```
+   
+   Or set `ORACLE_MCP_CONFIG` to the config file path and run with no extra arguments:
+   ```bash
+   export ORACLE_MCP_CONFIG=/absolute/path/to/config.json
+   oracle-mcp-server
+   ```
+
+### Install from PyPI with `uvx` (after publishing)
+
+Once the package is on [PyPI](https://pypi.org/project/oracle-mcp-server/) (see **Maintainers — releasing** below), run it without cloning:
+
+```bash
+uvx oracle-mcp-server /absolute/path/to/config.json
+```
+
+Use `env` in the MCP client to set `ORACLE_MCP_CONFIG` instead of a CLI argument if you prefer.
 
 ## 📁 Project Structure
 
@@ -78,7 +93,7 @@ oracle-mcp-server/
 ├── src/
 │   └── oracle_mcp_server/     # Installable Python package
 │       ├── __init__.py
-│       ├── __main__.py        # Entry point for `python -m oracle_mcp_server`
+│       ├── __main__.py        # Entry point for `oracle-mcp-server` / `python -m oracle_mcp_server`
 │       ├── server.py          # MCP server, tools, SQL execution
 │       ├── tenant_config.py   # Tenants, DSN, sql_max_tier
 │       └── sql_tier_policy.py # SQL tier classification
@@ -89,7 +104,7 @@ oracle-mcp-server/
 ├── tests/                     # pytest suite (unit + mocked server tests)
 ├── pyproject.toml             # Package metadata + src layout (use with `pip install -e .`)
 ├── config.json                # Local server configuration (created by bootstrap; not in git)
-├── requirements.txt           # Python dependencies
+├── requirements.txt           # Optional legacy mirror; primary deps are in pyproject.toml
 ├── THIRD_PARTY_NOTICES.md     # Third-party and dependency license summary
 ├── README.md
 └── LICENSE
@@ -97,7 +112,14 @@ oracle-mcp-server/
 
 ## ⚙️ Configuration
 
-The server uses `config.json` in the **repository root** (current working directory) by default. The bootstrap script creates it from [`config/config.example.json`](config/config.example.json). You can also copy that file manually to `config.json` and define **one entry per Oracle user/schema** under `tenants`. Each key is the `tenant_id` clients pass to the `sql_*` tools.
+You must point the server at a config file explicitly:
+
+1. **First command-line argument** — path to `config.json` (recommended for `uvx` and MCP `args`), or  
+2. **`ORACLE_MCP_CONFIG`** — absolute or relative path to the same file.
+
+There is no implicit `config.json` in the current working directory.
+
+The bootstrap script creates `config.json` in the **repository root** from [`config/config.example.json`](config/config.example.json). You can also copy that file manually and define **one entry per Oracle user/schema** under `tenants`. Each key is the `tenant_id` clients pass to the `sql_*` tools.
 
 **Migration from older configs:** if you previously used a single top-level `database` object, move those fields under `tenants` using a stable id (for example `"prod"`).
 
@@ -226,24 +248,58 @@ Statement classification uses **heuristics** (leading keywords, `WITH` and `FOR 
 
 ## 🔗 MCP Client Configuration
 
-To use this server with an MCP client, add the following to your MCP client configuration:
+To use this server with an MCP client, add one of the following patterns.
 
-Use the same Python interpreter you used for `pip install -e .` (often a venv). From the repo root, `python -m oracle_mcp_server` loads `config.json` next to your working directory unless you pass a config path.
+**Published package (`uvx`)** — no venv or repo `cwd` required:
+
+```json
+{
+  "mcpServers": {
+    "oracle-sql-helper": {
+      "command": "uvx",
+      "args": ["oracle-mcp-server", "/absolute/path/to/config.json"],
+      "env": {}
+    }
+  }
+}
+```
+
+**Installed console script** — after `pip install oracle-mcp-server` or `pip install -e .`:
+
+```json
+{
+  "mcpServers": {
+    "oracle-sql-helper": {
+      "command": "oracle-mcp-server",
+      "args": ["/absolute/path/to/config.json"],
+      "env": {}
+    }
+  }
+}
+```
+
+**Development** — same Python you used for `pip install -e ".[test]"`:
 
 ```json
 {
   "mcpServers": {
     "oracle-sql-helper": {
       "command": "python",
-      "args": ["-m", "oracle_mcp_server"],
-      "env": {},
-      "cwd": "path/to/oracle-mcp-server"
+      "args": ["-m", "oracle_mcp_server", "/absolute/path/to/config.json"],
+      "env": {}
     }
   }
 }
 ```
 
-If your MCP host does not support `cwd`, pass an absolute path to `config.json` as the first arg after `-m oracle_mcp_server` (add it to the `args` array).
+**Config via environment** (any of the above commands may use empty `args` if you set `ORACLE_MCP_CONFIG` in `env`).
+
+## Maintainers — releasing
+
+1. Bump `version` in [`pyproject.toml`](pyproject.toml).
+2. Commit and push, then create a version tag (for example `v1.0.1`).
+3. GitHub Actions **Publish** workflow (on tag push) builds and uploads to PyPI using **trusted publishing** — register this repo on PyPI under the project’s publishing settings; see [`.github/workflows/publish.yml`](.github/workflows/publish.yml).
+4. Verify [PyPI](https://pypi.org/project/oracle-mcp-server/) and smoke-test: `uvx oracle-mcp-server /path/to/config.json`.
 
 ## 🔒 Security Features
 
@@ -274,7 +330,7 @@ If your MCP host does not support `cwd`, pass an absolute path to `config.json` 
 ### Common Issues
 
 1. **`oracledb` import or driver errors**:
-   - Ensure dependencies are installed: `pip install -r requirements.txt` (or re-run `python scripts/bootstrap.py`)
+   - Ensure dependencies are installed: `pip install -e .` or `pip install oracle-mcp-server` (or re-run `python scripts/bootstrap.py`)
    - Check Python version and `cryptography` (a dependency of `python-oracledb`)
 
 2. **Connection timeout**:
