@@ -43,15 +43,16 @@ Forked from: Siddharth Arvind Singh
    cd oracle-mcp-server
    ```
 
-2. **Run the setup script** (recommended):
+2. **Run the bootstrap script** (recommended):
    ```bash
-   python setup.py
+   python scripts/bootstrap.py
    ```
    
    This will:
    - Check Python version compatibility
-   - Install required dependencies
-   - Create `config.json` from example
+   - Install required dependencies (`requirements.txt`)
+   - Install the package in editable mode (`pip install -e .`) so `python -m oracle_mcp_server` works
+   - Create `config.json` in the repository root from `config/config.example.json`
    - Verify Oracle client availability
 
 3. **Install Oracle Client Libraries** (if not already installed):
@@ -72,32 +73,42 @@ Forked from: Siddharth Arvind Singh
    # Use your preferred editor to modify config.json
    ```
 
-5. **Run the server**:
+5. **Run the server** (from the repository root, after bootstrap):
    ```bash
-   python mcp_server.py
+   python -m oracle_mcp_server
+   ```
+   
+   Optional: pass an explicit config path as the first argument:
+   ```bash
+   python -m oracle_mcp_server /path/to/config.json
    ```
 
 ## 📁 Project Structure
 
 ```
-SQLHelp/
-├── schema/                    # Schema and database structure files
-│   ├── db_index.json         # Main schema index with table relationships
-│   ├── tables/               # Individual table schema files (JSON)
-│   ├── database_tables/      # HTML documentation for tables
-│   ├── catalogs/             # CSV catalog files
-│   └── docs/                 # Schema documentation
-├── mcp_server.py             # Main MCP server implementation
-├── config.json               # Server configuration
-├── config.example.json       # Example configuration
-├── requirements.txt          # Python dependencies
-├── setup.py                 # Setup script
-└── README.md                # This file
+oracle-mcp-server/
+├── src/
+│   └── oracle_mcp_server/     # Installable Python package
+│       ├── __init__.py
+│       ├── __main__.py        # Entry point for `python -m oracle_mcp_server`
+│       ├── server.py          # MCP server, tools, SQL execution
+│       ├── tenant_config.py   # Tenants, DSN, sql_max_tier
+│       └── sql_tier_policy.py # SQL tier classification
+├── config/
+│   └── config.example.json    # Example configuration (copy to root `config.json`)
+├── scripts/
+│   └── bootstrap.py           # Dependency + editable install + config copy
+├── tests/                     # Placeholder for automated tests
+├── pyproject.toml             # Package metadata + src layout (use with `pip install -e .`)
+├── config.json                # Local server configuration (created by bootstrap; not in git)
+├── requirements.txt           # Python dependencies
+├── README.md
+└── LICENSE
 ```
 
 ## ⚙️ Configuration
 
-The server uses `config.json` for configuration. Copy `config.example.json` to `config.json` and define **one entry per Oracle user/schema** under `tenants`. Each key is the `tenant_id` clients pass to the `sql_*` tools.
+The server uses `config.json` in the **repository root** (current working directory) by default. The bootstrap script creates it from [`config/config.example.json`](config/config.example.json). You can also copy that file manually to `config.json` and define **one entry per Oracle user/schema** under `tenants`. Each key is the `tenant_id` clients pass to the `sql_*` tools.
 
 **Migration from older configs:** if you previously used a single top-level `database` object, move those fields under `tenants` using a stable id (for example `"prod"`).
 
@@ -228,17 +239,22 @@ Statement classification uses **heuristics** (leading keywords, `WITH` and `FOR 
 
 To use this server with an MCP client, add the following to your MCP client configuration:
 
+Use the same Python interpreter you used for `pip install -e .` (often a venv). From the repo root, `python -m oracle_mcp_server` loads `config.json` next to your working directory unless you pass a config path.
+
 ```json
 {
   "mcpServers": {
     "oracle-sql-helper": {
       "command": "python",
-      "args": ["path/to/oracle-mcp-server/mcp_server.py"],
-      "env": {}
+      "args": ["-m", "oracle_mcp_server"],
+      "env": {},
+      "cwd": "path/to/oracle-mcp-server"
     }
   }
 }
 ```
+
+If your MCP host does not support `cwd`, pass an absolute path to `config.json` as the first arg after `-m oracle_mcp_server` (add it to the `args` array).
 
 ## 🔒 Security Features
 

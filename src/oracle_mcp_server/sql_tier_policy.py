@@ -5,7 +5,7 @@ Heuristic SQL parsing and minimum tier classification for tiered MCP SQL tools.
 import re
 from typing import List, Optional, Tuple
 
-from tenant_config import SqlTier
+from .tenant_config import SqlTier
 
 
 def _strip_leading_sql_comments_and_whitespace(sql_text: str) -> str:

@@ -19,14 +19,14 @@ try:
 except ImportError:
     oracledb = None
 
-from sql_tier_policy import (
+from .sql_tier_policy import (
     _classify_minimum_sql_tier,
     _invoked_sql_tier,
     _non_empty_statement_count,
     _tenant_cap_error_message,
     _tier_check_error_message,
 )
-from tenant_config import SqlTier, _build_dsn, _parse_tenants
+from .tenant_config import SqlTier, _build_dsn, _parse_tenants
 
 logger = logging.getLogger("oracle-mcp-server")
 

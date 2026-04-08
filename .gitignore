@@ -47,7 +47,7 @@ mcp_server.log
 *.db
 *.sqlite
 
-# Database schema and table files (generated content)
+# Database schema and table files (generated content; legacy path)
 schema/db_index.json
 schema/tables/
 schema/database_tables/

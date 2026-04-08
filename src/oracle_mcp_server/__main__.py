@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Oracle Database MCP Server
-A Model Context Protocol server for executing SQL queries against Oracle Database
+Oracle Database MCP Server entry point.
+
+Run from the repository root after `pip install -e .`:
+    python -m oracle_mcp_server
 """
 
 import asyncio
@@ -18,7 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("oracle-mcp-server")
 
-from oracle_mcp_server import OracleMCPServer  # noqa: E402 — logging must be configured first
+from oracle_mcp_server.server import OracleMCPServer  # noqa: E402 — logging must be configured first
 
 
 def main():
