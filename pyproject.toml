@@ -9,6 +9,33 @@ description = "MCP server for Oracle Database SQL execution"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
+authors = [{ name = "João Castro Pinto" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "oracledb>=2.0.0",
+    "rich>=13.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/jcpinto54/oracle-mcp-server"
+Repository = "https://github.com/jcpinto54/oracle-mcp-server"
+Issues = "https://github.com/jcpinto54/oracle-mcp-server/issues"
+
+[project.scripts]
+oracle-mcp-server = "oracle_mcp_server.__main__:main"
 
 [project.optional-dependencies]
 test = [
