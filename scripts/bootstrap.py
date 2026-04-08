@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bootstrap script for Oracle MCP Server: Python check, dependencies, editable install, config copy.
+Bootstrap script for Oracle MCP Server: Python check, editable install from pyproject.toml, config copy.
 """
 
 import json
@@ -22,28 +22,21 @@ def check_python_version():
     print(f"✅ Python {sys.version_info.major}.{sys.version_info.minor} detected")
 
 
-def install_dependencies(repository_root: Path):
-    """Install Python dependencies from requirements.txt"""
-    print("📦 Installing Python dependencies...")
-    requirements_file = repository_root / "requirements.txt"
+def install_package_editable_with_test_extras(repository_root: Path):
+    """Install the package in editable mode with runtime + test dependencies from pyproject.toml."""
+    print("📦 Installing package (editable) and dependencies from pyproject.toml...")
     try:
         subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)]
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-e",
+                f"{repository_root}[test]",
+            ]
         )
-        print("✅ Dependencies installed successfully")
-    except subprocess.CalledProcessError as install_error:
-        print(f"❌ Failed to install dependencies: {install_error}")
-        sys.exit(1)
-
-
-def install_editable_package(repository_root: Path):
-    """Install the package in editable mode so `python -m oracle_mcp_server` works."""
-    print("📦 Installing package in editable mode...")
-    try:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "-e", str(repository_root)]
-        )
-        print("✅ Editable install completed")
+        print("✅ Editable install completed (includes test extras)")
     except subprocess.CalledProcessError as install_error:
         print(f"❌ Editable install failed: {install_error}")
         sys.exit(1)
@@ -96,8 +89,7 @@ def main():
     print("=" * 50)
 
     check_python_version()
-    install_dependencies(repository_root)
-    install_editable_package(repository_root)
+    install_package_editable_with_test_extras(repository_root)
     create_config(repository_root)
     check_oracle_client()
 
@@ -105,7 +97,7 @@ def main():
     print("✅ Setup completed!")
     print("📝 Next steps:")
     print("   1. Edit config.json with your database credentials")
-    print("   2. Run: python -m oracle_mcp_server")
+    print("   2. Run: oracle-mcp-server config.json   (or: python -m oracle_mcp_server config.json)")
     print("   3. Configure your MCP client to use this server")
 
 

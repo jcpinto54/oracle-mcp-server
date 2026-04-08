@@ -1,3 +1,5 @@
+# Optional mirror of runtime dependencies for older workflows.
+# Source of truth: dependency list in pyproject.toml (use pip install -e . or uv).
 # MCP Server Dependencies
 mcp>=1.0.0
 
